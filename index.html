@@ -481,19 +481,25 @@ async function doAuth(){
   btn.disabled=false;
 }
 
-// 旧doLogin関数を残す（後方互換）
-async function doLogin(){ doAuth(); }
+  // ── AUTH STATE LISTENER & LOGOUT
+sb.auth.onAuthStateChange((event, session) => {
+  if (event === 'SIGNED_IN' && session) {
+    startApp(session.user);
+  } else if (event === 'SIGNED_OUT') {
+    currentUser = null;
+    cache = {records:[], meals:[]};
+    document.getElementById('app-screen').style.display = 'none';
+    document.getElementById('login-screen').style.display = 'flex';
+    document.getElementById('login-email').value = '';
+    document.getElementById('login-pass').value = '';
+  }
+});
 
 async function doLogout(){
   await sb.auth.signOut();
-  currentUser=null;
-  cache={records:[],meals:[]};
-  document.getElementById('app-screen').style.display='none';
-  document.getElementById('login-screen').style.display='flex';
-  document.getElementById('login-email').value='';
-  document.getElementById('login-pass').value='';
 }
 
+// ── APP START
 async function startApp(user){
   currentUser=user;
   document.getElementById('login-screen').style.display='none';
@@ -512,12 +518,6 @@ async function startApp(user){
   renderSteps();
   renderFoodChips();
 }
-
-// check existing session on load
-window.addEventListener('load', async()=>{
-  const {data:{session}}=await sb.auth.getSession();
-  if(session) startApp(session.user);
-});
 
 // ── DATA LOAD
 async function loadAllData(){
