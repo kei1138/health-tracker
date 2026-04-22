@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>体調トラッカー</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{
+  --teal:#00897B;--teal-l:#E0F2F1;--teal-d:#004D40;--teal-m:#26A69A;
+  --pink:#E91E63;--pink-l:#FCE4EC;
+  --amber:#F57F17;--amber-l:#FFFDE7;
+  --purple:#6A1B9A;--red:#C62828;--red-l:#FFEBEE;
+  --green:#2E7D32;--green-l:#E8F5E9;
+  --dark:#1C2333;--gray:#78909C;--lg:#F0F4F8;
+  --shadow:0 2px 14px rgba(0,0,0,0.09);--r:14px;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+body{font-family:'Noto Sans JP',sans-serif;background:var(--lg);color:var(--dark);min-height:100vh;padding-bottom:80px;}
+
+/* ── LOGIN ── */
+#login-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:24px;}
+.login-card{background:#fff;border-radius:20px;padding:28px 22px;width:100%;max-width:360px;box-shadow:0 4px 24px rgba(0,0,0,0.12);}
+.login-logo{text-align:center;margin-bottom:20px;}
+.login-logo div{font-size:40px;margin-bottom:8px;}
+.login-logo h1{font-size:20px;font-weight:900;color:var(--teal-d);}
+.login-logo p{font-size:12px;color:var(--gray);margin-top:4px;}
+.login-field{margin-bottom:14px;}
+.login-field label{font-size:11px;font-weight:700;color:var(--gray);display:block;margin-bottom:5px;}
+.login-field input{width:100%;border:1.5px solid #dde3ea;border-radius:10px;padding:10px 12px;font-family:inherit;font-size:14px;color:var(--dark);background:var(--lg);outline:none;}
+.login-field input:focus{border-color:var(--teal);background:#fff;}
+.login-btn{width:100%;padding:13px;background:linear-gradient(135deg,var(--teal),var(--teal-d));color:#fff;border:none;border-radius:11px;font-family:inherit;font-size:15px;font-weight:700;cursor:pointer;margin-top:6px;box-shadow:0 4px 12px rgba(0,121,107,.3);}
+.login-btn:active{transform:scale(.98);}
+.login-err{font-size:12px;color:var(--red);text-align:center;margin-top:10px;min-height:18px;}
+
+/* ── APP ── */
+#app-screen{display:none;}
+.hdr{background:linear-gradient(135deg,var(--teal-d),var(--teal-m));color:#fff;padding:18px 16px 34px;position:relative;overflow:hidden;}
+.hdr::before{content:'';position:absolute;top:-30px;right:-30px;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,0.07);}
+.hdr::after{content:'';position:absolute;bottom:-20px;left:0;right:0;height:42px;background:var(--lg);border-radius:55% 55% 0 0/100% 100% 0 0;}
+.hdr-row{display:flex;align-items:flex-start;justify-content:space-between;}
+.hdr h1{font-size:18px;font-weight:900;}
+.hdr small{font-size:11px;opacity:.75;display:block;margin-top:3px;}
+.badge{display:inline-block;background:rgba(255,255,255,0.18);border-radius:20px;padding:3px 10px;font-size:11px;margin-top:7px;}
+.logout-btn{background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);color:#fff;border-radius:8px;padding:5px 10px;font-family:inherit;font-size:10px;font-weight:600;cursor:pointer;white-space:nowrap;margin-top:2px;}
+
+/* TABS */
+.tabs{display:flex;background:#fff;margin:0 10px;border-radius:12px;padding:3px;box-shadow:var(--shadow);position:sticky;top:7px;z-index:100;gap:2px;}
+.tab{flex:1;padding:6px 1px;border:none;background:transparent;border-radius:9px;font-family:inherit;font-size:9px;font-weight:600;color:var(--gray);cursor:pointer;transition:.2s;display:flex;flex-direction:column;align-items:center;gap:1px;line-height:1.2;}
+.tab .ic{font-size:15px;}
+.tab.active{background:var(--teal);color:#fff;}
+
+.page{display:none;padding:12px;}
+.page.active{display:block;animation:fi .2s ease;}
+@keyframes fi{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+
+.card{background:#fff;border-radius:var(--r);padding:14px;margin-bottom:11px;box-shadow:var(--shadow);}
+.card-ttl{font-size:11px;font-weight:700;color:var(--teal-d);margin-bottom:12px;display:flex;align-items:center;gap:4px;letter-spacing:.4px;text-transform:uppercase;}
+
+.date-row{display:flex;align-items:center;gap:8px;margin-bottom:12px;}
+.date-row label{font-size:11px;color:var(--gray);flex-shrink:0;font-weight:600;}
+input[type=date]{flex:1;border:1.5px solid #dde3ea;border-radius:9px;padding:7px 10px;font-family:inherit;font-size:13px;color:var(--dark);background:var(--lg);outline:none;}
+input[type=date]:focus{border-color:var(--teal);}
+
+.lbl{font-size:11px;color:var(--gray);margin-bottom:6px;font-weight:600;}
+.scale-row{display:flex;gap:5px;margin-bottom:12px;}
+.sb{flex:1;padding:9px 2px;border:2px solid #dde3ea;border-radius:9px;background:#fff;font-family:inherit;font-size:13px;font-weight:700;color:var(--gray);cursor:pointer;transition:.15s;text-align:center;line-height:1.2;}
+.sb span{font-size:9px;font-weight:400;display:block;margin-top:1px;}
+.sb.s0{border-color:#81C784;background:#E8F5E9;color:#2E7D32;}
+.sb.s1{border-color:#FFD54F;background:#FFFDE7;color:#E65100;}
+.sb.s2{border-color:#FF8A65;background:#FBE9E7;color:#BF360C;}
+.sb.s3{border-color:var(--red);background:var(--red-l);color:var(--red);}
+
+.toggle-row{display:flex;gap:7px;margin-bottom:11px;}
+.tb{flex:1;padding:10px;border:2px solid #dde3ea;border-radius:9px;background:#fff;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;transition:.15s;}
+.tb.yes{border-color:var(--pink);background:var(--pink-l);color:var(--pink);}
+.tb.no{border-color:#81C784;background:#E8F5E9;color:#2E7D32;}
+
+.ta{width:100%;border:1.5px solid #dde3ea;border-radius:9px;padding:9px 10px;font-family:inherit;font-size:13px;color:var(--dark);background:var(--lg);outline:none;resize:none;margin-bottom:11px;line-height:1.5;}
+.ta:focus{border-color:var(--teal);background:#fff;}
+
+.save-btn{width:100%;padding:13px;background:linear-gradient(135deg,var(--teal),var(--teal-d));color:#fff;border:none;border-radius:11px;font-family:inherit;font-size:15px;font-weight:700;cursor:pointer;box-shadow:0 4px 12px rgba(0,121,107,.35);transition:.1s;}
+.save-btn:active{transform:scale(.98);}
+.save-btn:disabled{opacity:.6;cursor:default;}
+
+/* MEAL */
+.meal-section{margin-bottom:14px;}
+.meal-sec-ttl{font-size:11px;font-weight:700;color:var(--gray);margin-bottom:8px;}
+.food-grid{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:4px;}
+.food-chip{padding:8px 13px;border:2px solid #dde3ea;border-radius:30px;background:#fff;font-family:inherit;font-size:12px;font-weight:600;color:var(--gray);cursor:pointer;transition:.15s;display:flex;align-items:center;gap:4px;position:relative;}
+.food-chip.good.on{border-color:#81C784;background:#E8F5E9;color:#2E7D32;}
+.food-chip.bad.on{border-color:var(--red);background:var(--red-l);color:var(--red);}
+.food-chip .chip-del{position:absolute;top:-5px;right:-5px;width:16px;height:16px;border-radius:50%;background:var(--gray);color:#fff;font-size:10px;display:none;align-items:center;justify-content:center;cursor:pointer;border:none;font-family:inherit;line-height:1;}
+.food-chip:hover .chip-del{display:flex;}
+.water-row{display:flex;align-items:center;gap:10px;margin-bottom:12px;}
+.water-count{font-size:22px;font-weight:900;color:var(--teal-d);min-width:32px;text-align:center;}
+.water-btn{width:36px;height:36px;border-radius:50%;border:2px solid var(--teal);background:#fff;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--teal-d);font-weight:700;transition:.12s;}
+.water-btn:active{background:var(--teal-l);}
+.water-cups{display:flex;gap:3px;flex-wrap:wrap;}
+.water-cup{font-size:16px;opacity:.25;transition:.1s;}
+.water-cup.on{opacity:1;}
+.add-food-form{display:flex;gap:7px;margin-top:8px;}
+.add-food-form input{flex:1;border:1.5px solid #dde3ea;border-radius:9px;padding:7px 10px;font-family:inherit;font-size:12px;color:var(--dark);background:var(--lg);outline:none;}
+.add-food-form input:focus{border-color:var(--teal);}
+.add-food-form button{padding:7px 13px;background:var(--teal);color:#fff;border:none;border-radius:9px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;}
+.meal-score{display:inline-flex;align-items:center;gap:5px;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;margin-bottom:10px;}
+.meal-score.great{background:var(--green-l);color:var(--green);}
+.meal-score.ok{background:var(--amber-l);color:var(--amber);}
+.meal-score.poor{background:var(--red-l);color:var(--red);}
+
+/* CALENDAR */
+.cal-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+.cal-nav button{background:none;border:none;font-size:22px;cursor:pointer;padding:3px 10px;border-radius:7px;color:var(--teal-d);line-height:1;}
+.cal-nav button:active{background:var(--teal-l);}
+.cal-title{font-size:15px;font-weight:700;}
+.legend{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
+.leg{display:flex;align-items:center;gap:3px;font-size:9px;color:var(--gray);}
+.leg-dot{width:9px;height:9px;border-radius:2px;flex-shrink:0;}
+.cal-wrap{width:100%;overflow:hidden;}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;width:100%;}
+.cal-dow{text-align:center;font-size:9px;font-weight:700;color:var(--gray);padding:3px 0;}
+.cal-dow:first-child{color:#E53935;}
+.cal-dow:last-child{color:#1976D2;}
+.cal-cell{aspect-ratio:1/1;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:7px;cursor:pointer;transition:.12s;font-size:11px;font-weight:500;min-width:0;overflow:hidden;}
+.cal-cell:active{transform:scale(.88);}
+.cal-cell.empty{pointer-events:none;}
+.cal-cell.today{outline:2px solid var(--teal);outline-offset:-2px;font-weight:900;}
+.cal-num{font-size:11px;font-weight:600;line-height:1;}
+.cal-dots{display:flex;gap:1px;margin-top:2px;}
+.cal-dot{width:4px;height:4px;border-radius:50%;flex-shrink:0;}
+.lvl-0{background:#E8F5E9;color:#2E7D32;}
+.lvl-1{background:#FFFDE7;color:#E65100;}
+.lvl-2{background:#FBE9E7;color:#BF360C;}
+.lvl-3{background:var(--red-l);color:var(--red);}
+.dot-0{background:#81C784;}.dot-1{background:#FFD54F;}.dot-2{background:#FF8A65;}.dot-3{background:var(--red);}
+.dot-meal-good{background:#81C784;}.dot-meal-ok{background:#FFD54F;}.dot-meal-poor{background:var(--red);}
+.day-det{border-radius:10px;padding:11px;margin-top:10px;border-left:4px solid var(--teal);background:var(--teal-l);}
+.day-det.empty{background:#f5f5f5;border-left-color:#ccc;color:var(--gray);font-size:12px;}
+.det-date{font-size:10px;font-weight:700;color:var(--teal-d);margin-bottom:5px;}
+.pills{display:flex;flex-wrap:wrap;gap:4px;}
+.pill{font-size:10px;padding:2px 8px;border-radius:20px;font-weight:600;}
+.ph{background:var(--pink-l);color:#880E4F;}.ps{background:var(--teal-l);color:var(--teal-d);}.pd{background:#EDE7F6;color:var(--purple);}
+.det-memo{font-size:11px;color:var(--gray);font-style:italic;margin-top:4px;}
+
+/* STATS */
+.stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:11px;}
+.stat{background:#fff;border-radius:12px;padding:12px;box-shadow:var(--shadow);text-align:center;}
+.stat-n{font-size:26px;font-weight:900;}
+.stat-l{font-size:9px;color:var(--gray);margin-top:2px;}
+.stat.r .stat-n{color:var(--red);}.stat.a .stat-n{color:var(--amber);}.stat.t .stat-n{color:var(--teal);}.stat.p .stat-n{color:var(--purple);}
+.alert{border-radius:11px;padding:10px 12px;font-size:12px;line-height:1.6;margin-bottom:9px;}
+.alert.warn{background:var(--amber-l);border-left:4px solid var(--amber);color:#5D4037;}
+.alert.danger{background:var(--red-l);border-left:4px solid var(--red);color:var(--red);}
+.alert.good{background:var(--teal-l);border-left:4px solid var(--teal);color:var(--teal-d);}
+.hist-item{background:#fff;border-radius:11px;padding:12px;margin-bottom:8px;box-shadow:var(--shadow);border-left:4px solid var(--teal);}
+.hist-item.m{border-left-color:var(--amber);}.hist-item.h{border-left-color:var(--red);}
+.hi-date{font-size:10px;color:var(--gray);margin-bottom:4px;font-weight:600;}
+.hi-memo{font-size:11px;color:var(--gray);margin-top:4px;font-style:italic;}
+
+/* ROADMAP */
+.prog-wrap{background:#eee;border-radius:20px;height:8px;overflow:hidden;margin-top:8px;}
+.prog-bar{height:100%;background:linear-gradient(90deg,var(--teal),var(--teal-m));border-radius:20px;transition:.4s;}
+.prog-label{font-size:10px;color:var(--gray);margin-top:4px;text-align:right;}
+.step-item{background:#fff;border-radius:11px;padding:13px;margin-bottom:9px;box-shadow:var(--shadow);}
+.step-hdr{display:flex;align-items:flex-start;gap:9px;}
+.step-left{display:flex;flex-direction:column;align-items:center;gap:4px;flex-shrink:0;}
+.step-num{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:13px;color:#fff;}
+.arrow-btn{width:28px;height:22px;border:1.5px solid #dde3ea;border-radius:6px;background:#fff;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;color:var(--gray);transition:.12s;}
+.arrow-btn:active{background:var(--teal-l);border-color:var(--teal);color:var(--teal-d);}
+.arrow-btn:disabled{opacity:.25;cursor:default;}
+.step-body{flex:1;min-width:0;}
+.step-t{font-size:13px;font-weight:700;margin-bottom:2px;display:flex;align-items:flex-start;justify-content:space-between;gap:4px;}
+.step-title-text{flex:1;}
+.step-d{font-size:11px;color:var(--gray);line-height:1.55;}
+.star-row{display:flex;gap:2px;margin:5px 0 3px;}
+.star{font-size:13px;cursor:pointer;opacity:.3;transition:.1s;}
+.star.on{opacity:1;}
+.step-meta{display:flex;gap:6px;margin-top:7px;flex-wrap:wrap;align-items:center;}
+.deadline-badge{font-size:10px;background:var(--amber-l);color:var(--amber);border-radius:20px;padding:2px 8px;font-weight:600;}
+.deadline-badge.done-badge{background:var(--green-l);color:var(--green);}
+.chk-btn{display:inline-flex;align-items:center;gap:4px;padding:5px 12px;border-radius:20px;border:1.5px solid #dde3ea;background:#fff;font-family:inherit;font-size:11px;cursor:pointer;font-weight:600;transition:.15s;}
+.chk-btn.done{background:var(--teal-l);border-color:var(--teal);color:var(--teal-d);}
+.del-btn{background:none;border:none;color:#ccc;cursor:pointer;font-size:15px;padding:0;flex-shrink:0;}
+.del-btn:active{color:var(--red);}
+.step-memo-ta{width:100%;border:1.5px solid #dde3ea;border-radius:8px;padding:7px 9px;font-family:inherit;font-size:11px;color:var(--dark);background:var(--lg);outline:none;resize:none;line-height:1.4;margin-top:8px;}
+.step-memo-ta:focus{border-color:var(--teal);background:#fff;}
+.add-step-form{background:#fff;border-radius:11px;padding:13px;margin-bottom:9px;box-shadow:var(--shadow);border:2px dashed #dde3ea;}
+.add-input{width:100%;border:1.5px solid #dde3ea;border-radius:8px;padding:7px 9px;font-family:inherit;font-size:12px;color:var(--dark);background:var(--lg);outline:none;margin-bottom:7px;}
+.add-input:focus{border-color:var(--teal);background:#fff;}
+.color-row{display:flex;gap:6px;margin-bottom:9px;}
+.color-pick{width:26px;height:26px;border-radius:50%;cursor:pointer;border:3px solid transparent;transition:.12s;flex-shrink:0;}
+.color-pick.sel{border-color:var(--dark);}
+.add-btn{width:100%;padding:10px;background:var(--teal);color:#fff;border:none;border-radius:9px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;}
+.add-btn:active{transform:scale(.98);}
+
+.slbl{font-size:10px;font-weight:700;color:var(--gray);letter-spacing:1px;text-transform:uppercase;margin:12px 0 6px;}
+.empty{text-align:center;padding:32px 14px;color:var(--gray);font-size:12px;line-height:1.9;}
+.empty .em{font-size:36px;display:block;margin-bottom:8px;}
+.loading{text-align:center;padding:20px;color:var(--gray);font-size:12px;}
+
+.toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(14px);background:var(--dark);color:#fff;padding:8px 18px;border-radius:30px;font-size:12px;font-weight:600;opacity:0;transition:.25s;z-index:999;white-space:nowrap;pointer-events:none;}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+</style>
+</head>
+<body>
+
+<!-- ═══ LOGIN ═══ -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-logo">
+      <div>🌿</div>
+      <h1>体調トラッカー</h1>
+      <p>毎日1分。記録が改善への第一歩。</p>
+    </div>
+    <div class="login-field">
+      <label>メールアドレス</label>
+      <input type="email" id="login-email" placeholder="example@gmail.com" autocomplete="email">
+    </div>
+    <div class="login-field">
+      <label>パスワード</label>
+      <input type="password" id="login-pass" placeholder="パスワード" autocomplete="current-password">
+    </div>
+    <button class="login-btn" onclick="doLogin()">ログイン</button>
+    <div class="login-err" id="login-err"></div>
+  </div>
+</div>
+
+<!-- ═══ APP ═══ -->
+<div id="app-screen">
+  <div class="hdr">
+    <div class="hdr-row">
+      <div>
+        <h1>🌿 体調トラッカー</h1>
+        <small>毎日1分。記録が改善への第一歩。</small>
+        <span class="badge" id="today-badge"></span>
+      </div>
+      <button class="logout-btn" onclick="doLogout()">ログアウト</button>
+    </div>
+  </div>
+  <div style="height:13px"></div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="showPage('record',this)"><span class="ic">📝</span>体調</button>
+    <button class="tab" onclick="showPage('meal',this)"><span class="ic">🥗</span>食事</button>
+    <button class="tab" onclick="showPage('calendar',this)"><span class="ic">📅</span>カレンダー</button>
+    <button class="tab" onclick="showPage('history',this)"><span class="ic">📊</span>履歴</button>
+    <button class="tab" onclick="showPage('roadmap',this)"><span class="ic">🗺️</span>ロード</button>
+  </div>
+
+  <!-- ═══ RECORD ═══ -->
+  <div id="page-record" class="page active">
+    <div class="card">
+      <div class="card-ttl">📝 今日の体調</div>
+      <div class="date-row"><label>日付</label><input type="date" id="rec-date"></div>
+      <div class="lbl">🤯 頭痛レベル</div>
+      <div class="scale-row" id="head-sc">
+        <button class="sb" onclick="setScale('head',0,this)">0<span>なし</span></button>
+        <button class="sb" onclick="setScale('head',1,this)">1<span>軽い</span></button>
+        <button class="sb" onclick="setScale('head',2,this)">2<span>中</span></button>
+        <button class="sb" onclick="setScale('head',3,this)">3<span>強い</span></button>
+      </div>
+      <div class="lbl">💊 薬を飲んだか</div>
+      <div class="toggle-row">
+        <button class="tb" id="dy" onclick="setDrug(true)">飲んだ ○</button>
+        <button class="tb" id="dn" onclick="setDrug(false)">飲んでいない ×</button>
+      </div>
+      <div id="drug-row" style="display:none">
+        <textarea class="ta" id="drug-name" placeholder="薬の名前・量（例：イブプロフェン 1錠）" rows="2"></textarea>
+      </div>
+      <div class="lbl">💆 肩こりレベル</div>
+      <div class="scale-row" id="shoulder-sc">
+        <button class="sb" onclick="setScale('shoulder',0,this)">0<span>なし</span></button>
+        <button class="sb" onclick="setScale('shoulder',1,this)">1<span>少し</span></button>
+        <button class="sb" onclick="setScale('shoulder',2,this)">2<span>かなり</span></button>
+        <button class="sb" onclick="setScale('shoulder',3,this)">3<span>ガチガチ</span></button>
+      </div>
+      <div class="lbl">😴 睡眠の質</div>
+      <div class="scale-row" id="sleep-sc">
+        <button class="sb" onclick="setScale('sleep',0,this)">0<span>ぐっすり</span></button>
+        <button class="sb" onclick="setScale('sleep',1,this)">1<span>まあまあ</span></button>
+        <button class="sb" onclick="setScale('sleep',2,this)">2<span>浅い</span></button>
+        <button class="sb" onclick="setScale('sleep',3,this)">3<span>眠れず</span></button>
+      </div>
+      <div class="lbl">📝 メモ</div>
+      <textarea class="ta" id="rec-memo" placeholder="気になったこと、体調の変化など…" rows="3"></textarea>
+      <button class="save-btn" id="rec-save-btn" onclick="saveRecord()">✅ 体調を保存</button>
+    </div>
+  </div>
+
+  <!-- ═══ MEAL ═══ -->
+  <div id="page-meal" class="page">
+    <div class="card">
+      <div class="card-ttl">🥗 今日の食事</div>
+      <div class="date-row"><label>日付</label><input type="date" id="meal-date"></div>
+      <div id="meal-score-badge"></div>
+      <div class="meal-section">
+        <div class="meal-sec-ttl">✅ 食べた（良いもの）</div>
+        <div class="food-grid" id="good-chips"></div>
+        <div class="add-food-form">
+          <input type="text" id="new-good-food" placeholder="追加（例：野菜）" maxlength="12">
+          <button onclick="addFoodItem('good')">＋追加</button>
+        </div>
+      </div>
+      <div class="meal-section">
+        <div class="meal-sec-ttl">⚠️ 食べた（気をつけたいもの）</div>
+        <div class="food-grid" id="bad-chips"></div>
+        <div class="add-food-form">
+          <input type="text" id="new-bad-food" placeholder="追加（例：お菓子）" maxlength="12">
+          <button onclick="addFoodItem('bad')">＋追加</button>
+        </div>
+      </div>
+      <div class="lbl">💧 水分（コップ何杯）</div>
+      <div class="water-row">
+        <button class="water-btn" onclick="setWater(Math.max(0,mealSt.water-1))">－</button>
+        <div class="water-count" id="water-count">0</div>
+        <button class="water-btn" onclick="setWater(mealSt.water+1)">＋</button>
+        <div class="water-cups" id="water-cups"></div>
+      </div>
+      <div class="lbl">📝 食事メモ</div>
+      <textarea class="ta" id="meal-memo" placeholder="今日食べたもの、気になったことなど…" rows="2"></textarea>
+      <button class="save-btn" id="meal-save-btn" onclick="saveMealRecord()">✅ 食事を保存</button>
+    </div>
+    <div class="alert good" style="font-size:11px;">💡 チップを長押しで削除・「＋追加」で自分の項目を追加できます。</div>
+  </div>
+
+  <!-- ═══ CALENDAR ═══ -->
+  <div id="page-calendar" class="page">
+    <div class="card">
+      <div class="cal-nav">
+        <button onclick="changeMonth(-1)">‹</button>
+        <span class="cal-title" id="cal-title"></span>
+        <button onclick="changeMonth(1)">›</button>
+      </div>
+      <div class="legend">
+        <div class="leg"><div class="leg-dot" style="background:#E8F5E9;border:1px solid #81C784"></div>頭痛なし</div>
+        <div class="leg"><div class="leg-dot" style="background:#FFFDE7;border:1px solid #FFD54F"></div>軽い</div>
+        <div class="leg"><div class="leg-dot" style="background:#FBE9E7;border:1px solid #FF8A65"></div>中</div>
+        <div class="leg"><div class="leg-dot" style="background:var(--red-l);border:1px solid var(--red)"></div>強い</div>
+        <div class="leg"><div class="leg-dot" style="background:#81C784;border-radius:50%"></div>食事◎</div>
+        <div class="leg"><div class="leg-dot" style="background:var(--red);border-radius:50%"></div>食事△</div>
+      </div>
+      <div class="cal-wrap">
+        <div class="cal-grid">
+          <div class="cal-dow">日</div><div class="cal-dow">月</div><div class="cal-dow">火</div>
+          <div class="cal-dow">水</div><div class="cal-dow">木</div><div class="cal-dow">金</div><div class="cal-dow">土</div>
+        </div>
+        <div class="cal-grid" id="cal-cells" style="margin-top:2px;"></div>
+      </div>
+      <div id="day-det" style="display:none"></div>
+    </div>
+  </div>
+
+  <!-- ═══ HISTORY ═══ -->
+  <div id="page-history" class="page">
+    <div class="stats-grid">
+      <div class="stat r"><div class="stat-n" id="s-drug">—</div><div class="stat-l">今月の服薬日数</div></div>
+      <div class="stat a"><div class="stat-n" id="s-head">—</div><div class="stat-l">平均頭痛レベル</div></div>
+      <div class="stat t"><div class="stat-n" id="s-days">—</div><div class="stat-l">記録した日数</div></div>
+      <div class="stat p"><div class="stat-n" id="s-meal">—</div><div class="stat-l">今月の食事記録</div></div>
+    </div>
+    <div id="alert-area"></div>
+    <div class="slbl">記録一覧</div>
+    <div id="hist-list"></div>
+  </div>
+
+  <!-- ═══ ROADMAP ═══ -->
+  <div id="page-roadmap" class="page">
+    <div class="card">
+      <div class="card-ttl">🗺️ 全体の進捗</div>
+      <div class="prog-wrap"><div class="prog-bar" id="prog-bar" style="width:0%"></div></div>
+      <div class="prog-label" id="prog-label">0% 完了</div>
+    </div>
+    <div id="steps-list"></div>
+    <div class="add-step-form">
+      <div class="card-ttl">＋ 自分のステップを追加</div>
+      <input class="add-input" type="text" id="new-title" placeholder="タイトル（例：整形外科を受診する）" maxlength="40">
+      <textarea class="add-input" id="new-desc" placeholder="詳細・メモ（任意）" rows="2" style="resize:none;"></textarea>
+      <input class="add-input" type="date" id="new-deadline">
+      <div class="lbl">難易度</div>
+      <div class="star-row" id="new-stars">
+        <span class="star on" onclick="setNewStar(1)">★</span>
+        <span class="star" onclick="setNewStar(2)">★</span>
+        <span class="star" onclick="setNewStar(3)">★</span>
+      </div>
+      <div class="lbl" style="margin-top:8px;">カラー</div>
+      <div class="color-row">
+        <div class="color-pick sel" style="background:#00897B" data-c="#00897B" onclick="pickColor(this)"></div>
+        <div class="color-pick" style="background:#E91E63" data-c="#E91E63" onclick="pickColor(this)"></div>
+        <div class="color-pick" style="background:#F57F17" data-c="#F57F17" onclick="pickColor(this)"></div>
+        <div class="color-pick" style="background:#6A1B9A" data-c="#6A1B9A" onclick="pickColor(this)"></div>
+        <div class="color-pick" style="background:#1565C0" data-c="#1565C0" onclick="pickColor(this)"></div>
+        <div class="color-pick" style="background:#C62828" data-c="#C62828" onclick="pickColor(this)"></div>
+      </div>
+      <button class="add-btn" onclick="addStep()">追加する</button>
+    </div>
+    <div class="alert good">💡 <strong>★1つのものから始めよう。</strong>全部やろうとしなくていい。</div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── SUPABASE
+const SUPABASE_URL = 'https://ultyurokitaaudyevxwp.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_2e02JBiGaQifS-JvyYM56g_UvrW6r2j';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// ── STATE
+let currentUser = null;
+let st={head:null,drug:null,shoulder:null,sleep:null};
+let mealSt={water:0,goodOn:{},badOn:{}};
+let calYear,calMonth,selectedColor='#00897B',newStarVal=1;
+let cache={records:[],meals:[]};
+
+const DEFAULT_GOOD=['🥦 野菜','🍗 タンパク質','🍚 ご飯','🍎 果物','🥚 卵'];
+const DEFAULT_BAD=['🍰 お菓子','🍞 パン','🍜 インスタント','🥤 ジュース','🍟 揚げ物'];
+const DEFAULT_STEPS=[
+  {id:'d1',title:'毎日記録をつける（今週から）',desc:'このアプリで頭痛・薬・肩こりを記録するだけでOK。',color:'#00897B',deadline:'',done:false,memo:'',star:1,builtin:true},
+  {id:'d2',title:'腎機能の再検査を受ける（今月中）',desc:'健診で出た再検査は先延ばし厳禁。「腎機能再検査と出た」と伝えるだけでOK。',color:'#F57F17',deadline:'',done:false,memo:'',star:2,builtin:true},
+  {id:'d3',title:'頭痛外来を受診する（来月まで）',desc:'薬に頼らず頭痛を減らす専門治療。近くのクリニックで「頭痛外来」を検索して予約するだけ。',color:'#E91E63',deadline:'',done:false,memo:'',star:2,builtin:true},
+  {id:'d4',title:'荷物と姿勢を見直す',desc:'リュックに変える・重いものを置いておくなど小さな工夫を。',color:'#6A1B9A',deadline:'',done:false,memo:'',star:1,builtin:true},
+];
+
+// ── AUTH
+async function doLogin(){
+  const email=document.getElementById('login-email').value.trim();
+  const pass=document.getElementById('login-pass').value;
+  const err=document.getElementById('login-err');
+  err.textContent='';
+  if(!email||!pass){err.textContent='メールとパスワードを入力してください';return;}
+  const btn=document.querySelector('.login-btn');
+  btn.textContent='ログイン中…';btn.disabled=true;
+  const {data,error}=await sb.auth.signInWithPassword({email,password:pass});
+  btn.textContent='ログイン';btn.disabled=false;
+  if(error){err.textContent='メールまたはパスワードが違います';return;}
+  startApp(data.user);
+}
+
+async function doLogout(){
+  await sb.auth.signOut();
+  currentUser=null;
+  cache={records:[],meals:[]};
+  document.getElementById('app-screen').style.display='none';
+  document.getElementById('login-screen').style.display='flex';
+  document.getElementById('login-email').value='';
+  document.getElementById('login-pass').value='';
+}
+
+async function startApp(user){
+  currentUser=user;
+  document.getElementById('login-screen').style.display='none';
+  document.getElementById('app-screen').style.display='block';
+  const now=new Date(),p=n=>String(n).padStart(2,'0');
+  calYear=now.getFullYear(); calMonth=now.getMonth();
+  const ds=`${now.getFullYear()}-${p(now.getMonth()+1)}-${p(now.getDate())}`;
+  document.getElementById('rec-date').value=ds;
+  document.getElementById('meal-date').value=ds;
+  document.getElementById('today-badge').textContent=`${now.getFullYear()}年${p(now.getMonth()+1)}月${p(now.getDate())}日`;
+  if(!localStorage.getItem('steps')) localStorage.setItem('steps',JSON.stringify(DEFAULT_STEPS));
+  if(!localStorage.getItem('foodGood')) localStorage.setItem('foodGood',JSON.stringify(DEFAULT_GOOD));
+  if(!localStorage.getItem('foodBad'))  localStorage.setItem('foodBad', JSON.stringify(DEFAULT_BAD));
+  await loadAllData();
+  renderCalendar();
+  renderSteps();
+  renderFoodChips();
+}
+
+// check existing session on load
+window.addEventListener('load', async()=>{
+  const {data:{session}}=await sb.auth.getSession();
+  if(session) startApp(session.user);
+});
+
+// ── DATA LOAD
+async function loadAllData(){
+  const [rRes,mRes]=await Promise.all([
+    sb.from('health_records').select('*').eq('user_id',currentUser.id).order('date',{ascending:false}),
+    sb.from('meal_records').select('*').eq('user_id',currentUser.id).order('date',{ascending:false}),
+  ]);
+  cache.records=rRes.data||[];
+  cache.meals=mRes.data||[];
+}
+
+// ── TABS
+function showPage(name,btn){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  btn.classList.add('active');
+  if(name==='history') renderHistory();
+  if(name==='calendar') renderCalendar();
+  if(name==='roadmap') renderSteps();
+  if(name==='meal'){renderFoodChips();updateMealScore();}
+}
+
+// ── SCALE / DRUG
+function setScale(type,val,btn){
+  st[type]=val;
+  const ids={head:'head-sc',shoulder:'shoulder-sc',sleep:'sleep-sc'};
+  document.querySelectorAll(`#${ids[type]} .sb`).forEach((b,i)=>b.className='sb'+(i===val?` s${i}`:''));
+}
+function setDrug(yes){
+  st.drug=yes;
+  document.getElementById('dy').className='tb'+(yes?' yes':'');
+  document.getElementById('dn').className='tb'+(!yes?' no':'');
+  document.getElementById('drug-row').style.display=yes?'block':'none';
+}
+
+// ── SAVE HEALTH
+async function saveRecord(){
+  const date=document.getElementById('rec-date').value;
+  if(!date){showToast('日付を選んでください');return;}
+  const btn=document.getElementById('rec-save-btn');
+  btn.disabled=true;btn.textContent='保存中…';
+  const payload={
+    user_id:currentUser.id, date,
+    head:st.head??-1, shoulder:st.shoulder??-1, sleep:st.sleep??-1,
+    drug:st.drug, drug_name:document.getElementById('drug-name').value.trim(),
+    memo:document.getElementById('rec-memo').value.trim()
+  };
+  // upsert by date+user_id
+  const existing=cache.records.find(r=>r.date===date);
+  let error;
+  if(existing){
+    ({error}=await sb.from('health_records').update(payload).eq('id',existing.id));
+  } else {
+    ({error}=await sb.from('health_records').insert(payload));
+  }
+  btn.disabled=false;btn.textContent='✅ 体調を保存';
+  if(error){showToast('⚠️ 保存に失敗しました');return;}
+  showToast('✅ 体調を保存しました！');
+  await loadAllData(); resetRecordForm(); renderCalendar();
+}
+function resetRecordForm(){
+  st={head:null,drug:null,shoulder:null,sleep:null};
+  document.querySelectorAll('.sb').forEach(b=>b.className='sb');
+  document.getElementById('dy').className='tb';
+  document.getElementById('dn').className='tb';
+  document.getElementById('drug-name').value='';
+  document.getElementById('rec-memo').value='';
+  document.getElementById('drug-row').style.display='none';
+}
+
+// ── MEAL CHIPS
+function getFoodItems(type){try{return JSON.parse(localStorage.getItem(type==='good'?'foodGood':'foodBad')||'[]');}catch{return[];}}
+function saveFoodItems(type,items){localStorage.setItem(type==='good'?'foodGood':'foodBad',JSON.stringify(items));}
+function renderFoodChips(){
+  ['good','bad'].forEach(type=>{
+    const items=getFoodItems(type);
+    document.getElementById(type+'-chips').innerHTML=items.map(item=>{
+      const on=mealSt[type+'On'][item]?'on':'';
+      return `<button class="food-chip ${type} ${on}" onclick="toggleFood('${type}','${item}')" oncontextmenu="deleteFood(event,'${type}','${item}')">${item}<button class="chip-del" onclick="deleteFood(event,'${type}','${item}')">×</button></button>`;
+    }).join('');
+  });
+  updateMealScore();
+}
+function toggleFood(type,item){mealSt[type+'On'][item]=!mealSt[type+'On'][item];renderFoodChips();}
+function deleteFood(e,type,item){
+  e.preventDefault();e.stopPropagation();
+  saveFoodItems(type,getFoodItems(type).filter(i=>i!==item));
+  delete mealSt[type+'On'][item];renderFoodChips();
+}
+function addFoodItem(type){
+  const inp=document.getElementById(type==='good'?'new-good-food':'new-bad-food');
+  const val=inp.value.trim();
+  if(!val){showToast('名前を入力してください');return;}
+  const items=getFoodItems(type);
+  if(items.includes(val)){showToast('すでにあります');return;}
+  items.push(val);saveFoodItems(type,items);inp.value='';renderFoodChips();showToast('✅ 追加しました');
+}
+function updateMealScore(){
+  const goodOn=Object.values(mealSt.goodOn).filter(Boolean).length;
+  const badOn=Object.values(mealSt.badOn).filter(Boolean).length;
+  const score=goodOn-badOn;
+  const el=document.getElementById('meal-score-badge');
+  if(goodOn===0&&badOn===0){el.innerHTML='';return;}
+  let cls,label;
+  if(score>=2){cls='great';label='🌟 今日の食事はいい感じ！';}
+  else if(score>=0){cls='ok';label='🌱 まずまず。野菜をもう少し！';}
+  else{cls='poor';label='⚠️ お菓子・パンが多め。意識してみよう。';}
+  el.innerHTML=`<div class="meal-score ${cls}">${label}</div>`;
+}
+function setWater(n){
+  mealSt.water=Math.max(0,Math.min(10,n));
+  document.getElementById('water-count').textContent=mealSt.water;
+  document.getElementById('water-cups').innerHTML=Array.from({length:8},(_,i)=>`<span class="water-cup ${i<mealSt.water?'on':''}">💧</span>`).join('');
+}
+
+// ── SAVE MEAL
+async function saveMealRecord(){
+  const date=document.getElementById('meal-date').value;
+  if(!date){showToast('日付を選んでください');return;}
+  const btn=document.getElementById('meal-save-btn');
+  btn.disabled=true;btn.textContent='保存中…';
+  const goodEaten=Object.entries(mealSt.goodOn).filter(([,v])=>v).map(([k])=>k);
+  const badEaten=Object.entries(mealSt.badOn).filter(([,v])=>v).map(([k])=>k);
+  const payload={
+    user_id:currentUser.id, date,
+    good_eaten:goodEaten, bad_eaten:badEaten,
+    water:mealSt.water, score:goodEaten.length-badEaten.length,
+    memo:document.getElementById('meal-memo').value.trim()
+  };
+  const existing=cache.meals.find(m=>m.date===date);
+  let error;
+  if(existing){
+    ({error}=await sb.from('meal_records').update(payload).eq('id',existing.id));
+  } else {
+    ({error}=await sb.from('meal_records').insert(payload));
+  }
+  btn.disabled=false;btn.textContent='✅ 食事を保存';
+  if(error){showToast('⚠️ 保存に失敗しました');return;}
+  showToast('✅ 食事を保存しました！');
+  await loadAllData(); resetMealForm(); renderCalendar();
+}
+function resetMealForm(){
+  mealSt={water:0,goodOn:{},badOn:{}};
+  document.getElementById('meal-memo').value='';
+  renderFoodChips(); setWater(0);
+  document.getElementById('meal-score-badge').innerHTML='';
+}
+
+// ── CALENDAR
+function p2(n){return String(n).padStart(2,'0');}
+function changeMonth(d){
+  calMonth+=d;
+  if(calMonth<0){calMonth=11;calYear--;}
+  if(calMonth>11){calMonth=0;calYear++;}
+  renderCalendar();
+  document.getElementById('day-det').style.display='none';
+}
+function renderCalendar(){
+  const y=calYear,m=calMonth;
+  document.getElementById('cal-title').textContent=`${y}年${m+1}月`;
+  const rmap={},mmap={};
+  cache.records.forEach(r=>rmap[r.date]=r);
+  cache.meals.forEach(r=>mmap[r.date]=r);
+  const firstDay=new Date(y,m,1).getDay();
+  const dim=new Date(y,m+1,0).getDate();
+  const now=new Date();
+  const todayStr=`${now.getFullYear()}-${p2(now.getMonth()+1)}-${p2(now.getDate())}`;
+  let html='';
+  for(let i=0;i<firstDay;i++) html+=`<div class="cal-cell empty"></div>`;
+  for(let d=1;d<=dim;d++){
+    const ds=`${y}-${p2(m+1)}-${p2(d)}`;
+    const rec=rmap[ds],meal=mmap[ds];
+    let cls='cal-cell',dots='';
+    if(rec&&rec.head>=0){cls+=` lvl-${rec.head}`;dots+=`<div class="cal-dot dot-${rec.head}"></div>`;}
+    if(meal){const mc=meal.score>=2?'good':meal.score>=0?'ok':'poor';dots+=`<div class="cal-dot dot-meal-${mc}"></div>`;}
+    if(ds===todayStr) cls+=' today';
+    html+=`<div class="${cls}" onclick="selectDay('${ds}')"><span class="cal-num">${d}</span><div class="cal-dots">${dots}</div></div>`;
+  }
+  document.getElementById('cal-cells').innerHTML=html;
+}
+function selectDay(ds){
+  const rmap={},mmap={};
+  cache.records.forEach(r=>rmap[r.date]=r);
+  cache.meals.forEach(r=>mmap[r.date]=r);
+  const rec=rmap[ds],meal=mmap[ds];
+  const det=document.getElementById('day-det');
+  det.style.display='block';
+  const [y,m,d]=ds.split('-');
+  const dow=['日','月','火','水','木','金','土'][new Date(ds).getDay()];
+  const dl=`${y}年${m}月${d}日（${dow}）`;
+  if(!rec&&!meal){det.className='day-det empty';det.innerHTML=dl+'　の記録はまだありません。';return;}
+  det.className='day-det';
+  const HL=['なし','軽い','中くらい','強い'],SL=['なし','少し','かなり','ガチガチ'];
+  let html=`<div class="det-date">${dl}</div><div class="pills">`;
+  if(rec){
+    if(rec.head>=0) html+=`<span class="pill ph">🤯 ${HL[rec.head]}(${rec.head})</span>`;
+    if(rec.shoulder>=0) html+=`<span class="pill ps">💆 ${SL[rec.shoulder]}(${rec.shoulder})</span>`;
+    if(rec.sleep>=0) html+=`<span class="pill" style="background:#EDE7F6;color:#6A1B9A">😴 ${['ぐっすり','まあまあ','浅い','眠れず'][rec.sleep]}(${rec.sleep})</span>`;
+    if(rec.drug===true) html+=`<span class="pill pd">💊 ${rec.drug_name||'服薬あり'}</span>`;
+    if(rec.drug===false) html+=`<span class="pill" style="background:#E8F5E9;color:#2E7D32">✓ 服薬なし</span>`;
+  }
+  if(meal){
+    if(meal.good_eaten?.length) html+=`<span class="pill" style="background:#E8F5E9;color:#2E7D32">✅ ${meal.good_eaten.join(' ')}</span>`;
+    if(meal.bad_eaten?.length) html+=`<span class="pill" style="background:#FFEBEE;color:#C62828">⚠️ ${meal.bad_eaten.join(' ')}</span>`;
+    html+=`<span class="pill" style="background:#E3F2FD;color:#1565C0">💧 ${meal.water}杯</span>`;
+  }
+  html+='</div>';
+  if(rec?.memo) html+=`<div class="det-memo">"${rec.memo}"</div>`;
+  if(meal?.memo) html+=`<div class="det-memo">🍽 ${meal.memo}</div>`;
+  det.innerHTML=html;
+}
+
+// ── HISTORY
+function renderHistory(){
+  const recs=cache.records,meals=cache.meals;
+  const now=new Date(),tm=`${now.getFullYear()}-${p2(now.getMonth()+1)}`;
+  const mo=recs.filter(r=>r.date.startsWith(tm));
+  const moMeals=meals.filter(m=>m.date.startsWith(tm));
+  const dd=mo.filter(r=>r.drug===true).length;
+  const ah=mo.length?(mo.reduce((s,r)=>s+(r.head>=0?r.head:0),0)/mo.length).toFixed(1):'—';
+  document.getElementById('s-drug').textContent=dd||'0';
+  document.getElementById('s-head').textContent=mo.length?ah:'—';
+  document.getElementById('s-days').textContent=recs.length;
+  document.getElementById('s-meal').textContent=moMeals.length+'日';
+  const aa=document.getElementById('alert-area');
+  if(dd>=10) aa.innerHTML=`<div class="alert danger">⚠️ <b>今月の服薬が${dd}日！</b>月10回以上は薬物乱用頭痛のサイン。この記録を持って頭痛外来へ。</div>`;
+  else if(dd>=6) aa.innerHTML=`<div class="alert warn">📌 今月の服薬が${dd}日。このペースは要注意。</div>`;
+  else if(recs.length) aa.innerHTML=`<div class="alert good">🌿 今月の服薬は${dd}日。引き続き記録を続けよう！</div>`;
+  else aa.innerHTML='';
+  const hl=document.getElementById('hist-list');
+  const allDates=[...new Set([...recs.map(r=>r.date),...meals.map(m=>m.date)])].sort((a,b)=>b.localeCompare(a));
+  if(!allDates.length){hl.innerHTML=`<div class="empty"><span class="em">📋</span>まだ記録がありません。</div>`;return;}
+  const rmap={},mmap={};
+  recs.forEach(r=>rmap[r.date]=r);meals.forEach(r=>mmap[r.date]=r);
+  const HL=['なし','軽','中','強'],SL=['なし','少し','かなり','ガチガチ'];
+  hl.innerHTML=allDates.map(date=>{
+    const r=rmap[date],m=mmap[date];
+    const mx=r?Math.max(r.head>=0?r.head:0,r.shoulder>=0?r.shoulder:0):0;
+    const [y,mo2,d]=date.split('-');
+    const dow=['日','月','火','水','木','金','土'][new Date(date).getDay()];
+    return `<div class="hist-item ${mx>=3?'h':mx>=2?'m':''}">
+      <div class="hi-date">${y}年${mo2}月${d}日（${dow}）</div>
+      <div class="pills">
+        ${r&&r.head>=0?`<span class="pill ph">🤯 ${HL[r.head]}(${r.head})</span>`:''}
+        ${r&&r.shoulder>=0?`<span class="pill ps">💆 ${SL[r.shoulder]}(${r.shoulder})</span>`:''}
+        ${r&&r.sleep>=0?`<span class="pill" style="background:#EDE7F6;color:#6A1B9A">😴 ${['ぐっすり','まあまあ','浅い','眠れず'][r.sleep]}(${r.sleep})</span>`:''}
+        ${r&&r.drug===true?`<span class="pill pd">💊 ${r.drug_name||'服薬あり'}</span>`:''}
+        ${m?`<span class="pill" style="background:#E8F5E9;color:#2E7D32">🥗 食事記録あり</span>`:''}
+        ${m?`<span class="pill" style="background:#E3F2FD;color:#1565C0">💧${m.water}杯</span>`:''}
+      </div>
+      ${r?.memo?`<div class="hi-memo">"${r.memo}"</div>`:''}
+    </div>`;
+  }).join('');
+}
+
+// ── ROADMAP (localStorage)
+function getSteps(){try{return JSON.parse(localStorage.getItem('steps')||'[]');}catch{return DEFAULT_STEPS;}}
+function saveSteps(s){localStorage.setItem('steps',JSON.stringify(s));}
+function renderSteps(){
+  const steps=getSteps();
+  const done=steps.filter(s=>s.done).length;
+  const pct=steps.length?Math.round(done/steps.length*100):0;
+  document.getElementById('prog-bar').style.width=pct+'%';
+  document.getElementById('prog-label').textContent=`${pct}% 完了（${done}/${steps.length}）`;
+  document.getElementById('steps-list').innerHTML=steps.map((s,i)=>{
+    const stars='★'.repeat(s.star||1)+'☆'.repeat(3-(s.star||1));
+    return `<div class="step-item">
+      <div class="step-hdr">
+        <div class="step-left">
+          <div class="step-num" style="background:${s.color}">${i+1}</div>
+          <button class="arrow-btn" onclick="moveStep(${i},-1)" ${i===0?'disabled':''}>▲</button>
+          <button class="arrow-btn" onclick="moveStep(${i},1)" ${i===steps.length-1?'disabled':''}>▼</button>
+        </div>
+        <div class="step-body">
+          <div class="step-t">
+            <span class="step-title-text" style="${s.done?'text-decoration:line-through;opacity:.5':''}">${s.title}</span>
+            ${!s.builtin?`<button class="del-btn" onclick="deleteStep('${s.id}')">×</button>`:''}
+          </div>
+          <div style="color:var(--amber);font-size:13px;margin:3px 0;">${stars}</div>
+          <div class="step-d">${s.desc}</div>
+          <div class="step-meta">
+            ${s.deadline?`<span class="deadline-badge ${s.done?'done-badge':''}">📅 ${s.deadline}</span>`:''}
+            <button class="chk-btn ${s.done?'done':''}" onclick="toggleStep('${s.id}')">${s.done?'✅ 完了！':'□ まだ'}</button>
+          </div>
+          <textarea class="step-memo-ta" rows="2" placeholder="達成メモ（病院名・受診日など）…" onchange="saveStepMemo('${s.id}',this.value)">${s.memo||''}</textarea>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+function moveStep(idx,dir){const steps=getSteps(),ni=idx+dir;if(ni<0||ni>=steps.length)return;[steps[idx],steps[ni]]=[steps[ni],steps[idx]];saveSteps(steps);renderSteps();}
+function toggleStep(id){const steps=getSteps(),s=steps.find(x=>x.id===id);if(s){s.done=!s.done;saveSteps(steps);renderSteps();showToast(s.done?'✅ 一歩前進！':'チェックを外しました');}}
+function deleteStep(id){if(!confirm('削除しますか？'))return;saveSteps(getSteps().filter(s=>s.id!==id));renderSteps();showToast('削除しました');}
+function saveStepMemo(id,val){const steps=getSteps(),s=steps.find(x=>x.id===id);if(s){s.memo=val;saveSteps(steps);}}
+function pickColor(el){document.querySelectorAll('.color-pick').forEach(c=>c.classList.remove('sel'));el.classList.add('sel');selectedColor=el.dataset.c;}
+function setNewStar(v){newStarVal=v;document.querySelectorAll('#new-stars .star').forEach((s,i)=>s.className='star'+(i<v?' on':''));}
+function addStep(){
+  const title=document.getElementById('new-title').value.trim();
+  if(!title){showToast('タイトルを入力してください');return;}
+  const steps=getSteps();
+  steps.push({id:'u'+Date.now(),title,desc:document.getElementById('new-desc').value.trim(),
+    deadline:document.getElementById('new-deadline').value,color:selectedColor,done:false,memo:'',star:newStarVal,builtin:false});
+  saveSteps(steps);
+  document.getElementById('new-title').value='';
+  document.getElementById('new-desc').value='';
+  document.getElementById('new-deadline').value='';
+  renderSteps();showToast('✅ ステップを追加しました！');
+}
+
+// ── TOAST
+function showToast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2300);
+}
+
+// Enter key on login
+document.getElementById('login-pass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
+</script>
+</body>
+</html>
